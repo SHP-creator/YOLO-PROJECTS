@@ -30,7 +30,7 @@ To use the object detection code:
 
 4.Run the object detection script:
 
-      python yolov4_object_detection.py
+      python yolov4_project.py
 
 The script will open a window displaying the real-time object detection results. Bounding boxes will be drawn around the detected objects, and labels will indicate the class and confidence score for each detection. Additionally, the output video with the detections will be saved as output.mp4 in user provided path.
 
