@@ -1,68 +1,121 @@
-import cv2
-import argparse
+import torch
 import numpy as np
-from ultralytics import  YOLO
+import cv2
+from time import time
+from ultralytics import YOLO
 import supervision as sv
-import time
 
 
+class ObjectDetection:
 
-def main():
-    pre_timeframe=0
-    cap = cv2.VideoCapture("input.mp4")
-    model = YOLO("yolov8n.pt")
-    box_annotator = sv.BoxAnnotator(
-        thickness=1,
-        text_scale=0.35,
-        text_padding=1
-    )
+    def __init__(self, capture_index, model_name):
+        self.capture_index = capture_index
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print("Using Device: ", self.device)
 
-    while True:
-        ret, frame = cap.read()
-       
+        self.model = self.load_model(model_name)
+        self.CLASS_NAMES_DICT = self.model.model.names
+        self.box_annotator = sv.BoxAnnotator(sv.ColorPalette.default(), thickness=1, text_thickness=1, text_scale=0.4)
 
-        starting_time= time.time()
-       
+    def load_model(self, model_name):
+        model = YOLO(model_name)  # load a pretrained YOLOv8n model
+        model.fuse()
+        return model
 
-        resized_frame = cv2.resize(frame, (640,480))
-        detections=model.predict(resized_frame,imgsz=(320,416))
-        
-        result = model(resized_frame, agnostic_nms=False)[0]
-        detections = sv.Detections.from_yolov8(result)
+    def predict(self, frame):
+        results = self.model(frame)
+        return results
 
+    def plot_bboxes(self, results, frame):
+        xyxys = []
+        confidences = []
+        class_ids = []
 
-        labels = [
-            f"{model.model.names[class_id]} {confidence:0.2f}"
-            for _, confidence, class_id, _
+        # Extract detections for person class
+        for result in results:
+            boxes = result.boxes.cpu().numpy()
+            class_id = boxes.cls[0]
+            conf = boxes.conf[0]
+            xyxy = boxes.xyxy[0]
+
+            if class_id == 0.0:
+                xyxys.append(result.boxes.xyxy.cpu().numpy())
+                confidences.append(result.boxes.conf.cpu().numpy())
+                class_ids.append(result.boxes.cls.cpu().numpy().astype(int))
+
+        # Setup detections for visualization
+        detections = sv.Detections(
+            xyxy=results[0].boxes.xyxy.cpu().numpy(),
+            confidence=results[0].boxes.conf.cpu().numpy(),
+            class_id=results[0].boxes.cls.cpu().numpy().astype(int),
+        )
+
+        # Format custom labels
+        self.labels = [
+            f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
+            for _, confidence, class_id, tracker_id
             in detections
         ]
 
-        frame = box_annotator.annotate(
-            scene=resized_frame,
-            detections=detections,
-            labels=labels
-        )
-        ending_time = time.time()
-        inference_time = ending_time - starting_time
-        inference_time_ms = inference_time * 1000
+        # Annotate and display frame
+        frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
 
-        fps =1/inference_time
+        return frame
 
-        cv2.putText(frame, f'Inference_time: {inference_time_ms:.2f}ms', (20, 245),
-                cv2.FONT_HERSHEY_DUPLEX, 0.6, (130, 195, 260), 1)
-        
-        cv2.putText(frame, f'FPS: {fps:.2f}', (20, 225),
-                cv2.FONT_HERSHEY_DUPLEX, 0.6, (125, 220, 3), 1)
-        cv2.imshow("yolov8", resized_frame)
+    def __call__(self):
+        cap = cv2.VideoCapture("sample.mp4")
+        assert cap.isOpened()
 
-        key = cv2.waitKey(1)
-        if key == ord('q') or key == ord('Q'):
-            break
+        # Get the video's original width and height
+        original_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        original_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-    cap.release()
-    cv2.destroyAllWindows()
+        # Define the output video path
+        output_path = "/home/secura/Documents/Yolo work/output.mp4"
+
+        # Get the video properties
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_width = int(original_width)
+        frame_height = int(original_height)
+
+        # Create a VideoWriter object to save the output video
+        output_video = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (frame_width, frame_height))
+
+        # Create a named window and resize it
+        cv2.namedWindow('YOLOv8 Detection', cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('YOLOv8 Detection', frame_width, frame_height)
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            start_time = time()
+
+            # Perform object detection
+            results = self.predict(frame)
+            frame = self.plot_bboxes(results, frame)
+
+            end_time = time()
+            fps = 1 / np.round(end_time - start_time, 2)
+
+            cv2.putText(frame, f'FPS: {int(fps)}', (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
+
+            # Write the frame to the output video file
+            output_video.write(frame)
+
+            cv2.imshow('YOLOv8 Detection', frame)
+
+            key = cv2.waitKey(1)
+            if key == ord('q') or key == ord('Q'):
+                break
+
+        # Release the resources
+        cap.release()
+        output_video.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    main()
-
+    detector = ObjectDetection(capture_index=0, model_name="yolov8n.pt")
+    detector()
