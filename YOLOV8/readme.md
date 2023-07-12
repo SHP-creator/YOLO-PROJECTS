@@ -52,6 +52,10 @@ Modify the output video path by changing the output_path variable in the script.
 
 Customize the window name and resizing by modifying the cv2.namedWindow and cv2.resizeWindow function calls.
 
+## OUTPUT
+
+![yolov8](https://github.com/SHP-creator/YOLO-PROJECTS/blob/main/YOLOV8/yolov8.png?raw=true)
+
 ## References
 YOLOv8: An Improved Version of the YOLO Object Detection Algorithm
 
