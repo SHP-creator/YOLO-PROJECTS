@@ -61,5 +61,5 @@ Based on the system configuration and input size, the frames per second (fps) an
 
 # OBJECT DETECTION OF YOLOV8
 
-
+![yolov8](https://github.com/SHP-creator/YOLO-PROJECTS/blob/main/YOLOV8/yolov8.png?raw=true)
 
